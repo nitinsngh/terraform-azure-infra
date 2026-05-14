@@ -1,55 +1,32 @@
 name: Terraform Dev Workflow
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-
-defaults:
-  run:
-    working-directory: environments/dev
 
 jobs:
-  plan:
+  terraform:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - run: terraform init
-      - run: terraform validate
-      - run: terraform plan -out=tfplan
-
-      # ✅ Upload plan so other jobs can use it
-      - uses: actions/upload-artifact@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          name: tfplan
-          path: tfplan
+          terraform_version: 1.15.2
 
-  apply:
-    needs: plan
-    runs-on: ubuntu-latest
-    environment:
-      name: dev  # Must exist in repo Settings → Environments
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        run: terraform init -backend-config=environments/dev/backend.tf
 
-      # ✅ Download the saved plan
-      - uses: actions/download-artifact@v4
-        with:
-          name: tfplan
+      - name: Terraform Plan
+        run: terraform plan -var-file=environments/dev/variables.tf
 
-      - run: terraform init
-      - run: terraform apply -auto-approve tfplan
+      - name: Terraform Apply (Manual Approval)
+        if: github.event_name == 'workflow_dispatch'
+        run: terraform apply -auto-approve -var-file=environments/dev/variables.tf
 
-  destroy:
-    needs: apply
-    runs-on: ubuntu-latest
-    environment:
-      name: dev
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - run: terraform init
-      - run: terraform destroy -auto-approve
+        
+        
